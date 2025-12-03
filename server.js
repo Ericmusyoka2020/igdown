@@ -1,39 +1,41 @@
+
 const express = require("express");
 const cors = require("cors");
 const { exec } = require("child_process");
-const path = require("path");
+const ytdlp = require("yt-dlp-exec");
 
 const app = express();
 app.use(cors());
 
-app.get("/", (req, res) => {
-    res.send("Instagram Downloader Backend Running");
-});
+app.get("/download", async (req, res) => {
+  const videoUrl = req.query.url;
 
-app.get("/download", (req, res) => {
-    const videoUrl = req.query.url;
-    if (!videoUrl) return res.status(400).json({ error: "No Instagram URL provided" });
+  if (!videoUrl) {
+    return res.status(400).json({ error: "No URL provided" });
+  }
 
-    // yt-dlp command to get direct video URL
-    const cmd = `yt-dlp -f mp4 -g "${videoUrl}"`;
-
-    exec(cmd, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
-        if (error || !stdout) {
-            console.log("Error:", stderr || error.message);
-            return res.status(500).json({
-                error: "Failed to fetch media. Post may be private or require login.",
-                details: stderr || error.message
-            });
-        }
-
-        // stdout contains the direct video URL
-        const downloadUrl = stdout.trim();
-        res.json({
-            type: "video",
-            url: downloadUrl
-        });
+  try {
+    // Use yt-dlp-exec to get the direct download link
+    const info = await ytdlp(videoUrl, {
+      dumpSingleJson: true,
+      noWarnings: true,
+      noCheckCertificate: true,
+      preferFreeFormats: true
     });
+
+    // Send the first video URL found
+    const videoLink = info?.url || info?.formats?.[0]?.url;
+
+    if (!videoLink) {
+      return res.status(500).json({ error: "Could not extract video URL" });
+    }
+
+    res.json({ videoUrl: videoLink });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error downloading video" });
+  }
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log("Backend running on port " + PORT));
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
